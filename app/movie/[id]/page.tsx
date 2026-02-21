@@ -3,10 +3,12 @@ import MovieDetail from "@/components/movie-detail"
 import Layout from "@/components/netflix-layout"
 
 // Dynamic metadata for movie pages
-export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params
+
   // Fetch movie data
   try {
-    const response = await fetch(`https://api.themoviedb.org/3/movie/${params.id}?api_key=${process.env.TMDB_API_KEY}`)
+    const response = await fetch(`https://api.themoviedb.org/3/movie/${id}?api_key=${process.env.TMDB_API_KEY}`)
     const movie = await response.json()
 
     return {
@@ -21,10 +23,12 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   }
 }
 
-export default function MovieDetailPage({ params }: { params: { id: string } }) {
+export default async function MovieDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+
   return (
     <Layout>
-      <MovieDetail id={params.id} />
+      <MovieDetail id={id} />
     </Layout>
   )
 }

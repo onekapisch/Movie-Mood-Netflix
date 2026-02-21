@@ -1,114 +1,135 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Check, ChevronsUpDown, Globe } from "lucide-react"
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Clapperboard, Globe } from "lucide-react"
+import {
+  DEFAULT_COUNTRY,
+  DEFAULT_SERVICE_KEY,
+  STREAMING_SERVICES,
+  getCountriesForService,
+  getCountryByCode,
+  getServiceByKey,
+  getValidCountryForService,
+} from "@/lib/streaming-options"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
-// List of countries where Netflix operates
-const countries = [
-  { value: "us", label: "United States" },
-  { value: "ca", label: "Canada" },
-  { value: "uk", label: "United Kingdom" },
-  { value: "fr", label: "France" },
-  { value: "de", label: "Germany" },
-  { value: "it", label: "Italy" },
-  { value: "es", label: "Spain" },
-  { value: "br", label: "Brazil" },
-  { value: "mx", label: "Mexico" },
-  { value: "au", label: "Australia" },
-  { value: "jp", label: "Japan" },
-  { value: "kr", label: "South Korea" },
-  { value: "in", label: "India" },
-  { value: "nl", label: "Netherlands" },
-  { value: "se", label: "Sweden" },
-  { value: "no", label: "Norway" },
-  { value: "dk", label: "Denmark" },
-  { value: "fi", label: "Finland" },
-  { value: "pt", label: "Portugal" },
-  { value: "pl", label: "Poland" },
-  { value: "za", label: "South Africa" },
-  { value: "sg", label: "Singapore" },
-  { value: "my", label: "Malaysia" },
-  { value: "ph", label: "Philippines" },
-  { value: "th", label: "Thailand" },
-  { value: "id", label: "Indonesia" },
-  { value: "ar", label: "Argentina" },
-  { value: "cl", label: "Chile" },
-  { value: "co", label: "Colombia" },
-  { value: "pe", label: "Peru" },
-]
+const STREAMING_SERVICE_STORAGE_KEY = "selectedStreamingService"
+const LEGACY_COUNTRY_STORAGE_KEY = "selectedCountry"
+
+function getServiceCountryStorageKey(serviceKey: string): string {
+  return `selectedCountry:${serviceKey}`
+}
 
 export default function CountrySelector() {
-  const [open, setOpen] = useState(false)
-  const [selectedCountry, setSelectedCountry] = useState(countries[0])
+  const [selectedServiceKey, setSelectedServiceKey] = useState(DEFAULT_SERVICE_KEY)
+  const [selectedCountry, setSelectedCountry] = useState(DEFAULT_COUNTRY)
 
-  // Load saved country from localStorage on component mount
   useEffect(() => {
-    const savedCountry = localStorage.getItem("selectedCountry")
-    if (savedCountry) {
-      const country = countries.find((c) => c.value === savedCountry)
-      if (country) {
-        setSelectedCountry(country)
-      }
-    } else {
-      // Try to detect user's country (simplified version)
-      // In a real app, you might use a geolocation API
-      const userLanguage = navigator.language || "en-US"
-      const countryCode = userLanguage.split("-")[1]?.toLowerCase()
-      if (countryCode) {
-        const detectedCountry = countries.find((c) => c.value === countryCode)
-        if (detectedCountry) {
-          setSelectedCountry(detectedCountry)
-          localStorage.setItem("selectedCountry", detectedCountry.value)
-        }
-      }
-    }
+    const savedServiceKey = localStorage.getItem(STREAMING_SERVICE_STORAGE_KEY) || DEFAULT_SERVICE_KEY
+    const initialServiceKey = getServiceByKey(savedServiceKey).key
+
+    const savedCountryForService = localStorage.getItem(getServiceCountryStorageKey(initialServiceKey))
+    const savedLegacyCountry = localStorage.getItem(LEGACY_COUNTRY_STORAGE_KEY)
+    const initialCountry = getValidCountryForService(
+      initialServiceKey,
+      savedCountryForService || savedLegacyCountry || undefined,
+    )
+
+    setSelectedServiceKey(initialServiceKey)
+    setSelectedCountry(initialCountry)
+
+    localStorage.setItem(STREAMING_SERVICE_STORAGE_KEY, initialServiceKey)
+    localStorage.setItem(getServiceCountryStorageKey(initialServiceKey), initialCountry)
+    localStorage.setItem(LEGACY_COUNTRY_STORAGE_KEY, initialCountry)
+
+    emitPreferenceChange(initialServiceKey, initialCountry)
   }, [])
 
-  const handleSelect = (country: (typeof countries)[0]) => {
-    setSelectedCountry(country)
-    setOpen(false)
-    localStorage.setItem("selectedCountry", country.value)
+  const handleServiceChange = (nextServiceKey: string) => {
+    const validServiceKey = getServiceByKey(nextServiceKey).key
+    const savedCountry = localStorage.getItem(getServiceCountryStorageKey(validServiceKey))
+    const nextCountry = getValidCountryForService(validServiceKey, savedCountry || selectedCountry)
 
-    // Dispatch a custom event so other components can react to country change
-    window.dispatchEvent(new CustomEvent("countrychange", { detail: country.value }))
+    setSelectedServiceKey(validServiceKey)
+    setSelectedCountry(nextCountry)
+
+    localStorage.setItem(STREAMING_SERVICE_STORAGE_KEY, validServiceKey)
+    localStorage.setItem(getServiceCountryStorageKey(validServiceKey), nextCountry)
+    localStorage.setItem(LEGACY_COUNTRY_STORAGE_KEY, nextCountry)
+
+    emitPreferenceChange(validServiceKey, nextCountry)
   }
 
+  const handleCountryChange = (nextCountry: string) => {
+    const validCountry = getValidCountryForService(selectedServiceKey, nextCountry)
+    setSelectedCountry(validCountry)
+
+    localStorage.setItem(getServiceCountryStorageKey(selectedServiceKey), validCountry)
+    localStorage.setItem(LEGACY_COUNTRY_STORAGE_KEY, validCountry)
+
+    emitPreferenceChange(selectedServiceKey, validCountry)
+  }
+
+  const selectedService = getServiceByKey(selectedServiceKey)
+  const availableCountries = getCountriesForService(selectedServiceKey)
+
   return (
-    <div className="flex items-center">
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button variant="outline" role="combobox" aria-expanded={open} className="w-[180px] justify-between">
-            <Globe className="mr-2 h-4 w-4 text-netflix-red" />
-            {selectedCountry.label}
-            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-[200px] p-0">
-          <Command>
-            <CommandInput placeholder="Search country..." />
-            <CommandList>
-              <CommandEmpty>No country found.</CommandEmpty>
-              <CommandGroup className="max-h-[300px] overflow-y-auto">
-                {countries.map((country) => (
-                  <CommandItem key={country.value} value={country.value} onSelect={() => handleSelect(country)}>
-                    <Check
-                      className={cn(
-                        "mr-2 h-4 w-4",
-                        selectedCountry.value === country.value ? "opacity-100" : "opacity-0",
-                      )}
-                    />
-                    {country.label}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
+    <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+      <Select value={selectedServiceKey} onValueChange={handleServiceChange}>
+        <SelectTrigger className="w-full sm:w-[180px]">
+          <div className="flex items-center gap-2">
+            <Clapperboard className="h-4 w-4 text-netflix-red" />
+            <SelectValue placeholder="Platform" />
+          </div>
+        </SelectTrigger>
+        <SelectContent>
+          {STREAMING_SERVICES.map((service) => (
+            <SelectItem key={service.key} value={service.key}>
+              {service.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <Select value={selectedCountry} onValueChange={handleCountryChange}>
+        <SelectTrigger className="w-full sm:w-[180px]">
+          <div className="flex items-center gap-2">
+            <Globe className="h-4 w-4 text-netflix-red" />
+            <SelectValue placeholder="Country">
+              {getCountryByCode(selectedCountry).label}
+            </SelectValue>
+          </div>
+        </SelectTrigger>
+        <SelectContent>
+          {availableCountries.map((country) => (
+            <SelectItem key={country.value} value={country.value}>
+              {country.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <span className="text-xs text-muted-foreground sm:hidden">
+        Showing availability for {selectedService.label} in {getCountryByCode(selectedCountry).label}
+      </span>
     </div>
   )
+}
+
+function emitPreferenceChange(serviceKey: string, country: string) {
+  const service = getServiceByKey(serviceKey)
+
+  window.dispatchEvent(
+    new CustomEvent("streamingfilterschange", {
+      detail: {
+        serviceKey: service.key,
+        serviceName: service.label,
+        providerId: service.providerId,
+        country,
+      },
+    }),
+  )
+
+  // Backward compatibility for existing listeners that still expect country-only events.
+  window.dispatchEvent(new CustomEvent("countrychange", { detail: country }))
 }

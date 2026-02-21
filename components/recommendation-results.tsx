@@ -6,13 +6,15 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { InfoIcon, GlobeIcon, RefreshCcw } from "lucide-react"
 import Link from "next/link"
-import { useToast } from "@/hooks/use-toast"
 
 interface RecommendationResultsProps {
   mood: string
   genres: string[]
   maxRuntime: number
   country: string
+  serviceName: string
+  providerId: number
+  serviceKey: string
 }
 
 interface Movie {
@@ -26,12 +28,19 @@ interface Movie {
   imdb_id?: string
 }
 
-export default function RecommendationResults({ mood, genres, maxRuntime, country }: RecommendationResultsProps) {
+export default function RecommendationResults({
+  mood,
+  genres,
+  maxRuntime,
+  country,
+  serviceName,
+  providerId,
+  serviceKey,
+}: RecommendationResultsProps) {
   const [results, setResults] = useState<Movie[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [retryCount, setRetryCount] = useState(0)
-  const { toast } = useToast()
 
   useEffect(() => {
     async function fetchRecommendations() {
@@ -57,23 +66,23 @@ export default function RecommendationResults({ mood, genres, maxRuntime, countr
           params.append("sort_by", "vote_count.desc")
         }
 
-        // Add country parameter for Netflix availability
+        // Add country parameter for regional availability.
         params.append("region", country.toUpperCase())
 
-        // Add watch provider filter for Netflix (provider ID 8)
-        params.append("with_watch_providers", "8")
+        // Filter results by selected streaming service.
+        params.append("with_watch_providers", String(providerId))
+        params.append("watch_monetization_types", "flatrate")
         params.append("watch_region", country.toUpperCase())
 
         const response = await fetch(`/api/tmdb?endpoint=${endpoint}&${params.toString()}`)
-
-        if (!response.ok) {
-          throw new Error("Failed to fetch recommendations")
-        }
-
         const data = await response.json()
 
+        if (!response.ok) {
+          throw new Error(data.status_message || data.error || "Failed to fetch recommendations")
+        }
+
         if (data.error) {
-          throw new Error(data.error)
+          throw new Error(data.status_message || data.error)
         }
 
         // If no results, try a more general search
@@ -150,7 +159,7 @@ export default function RecommendationResults({ mood, genres, maxRuntime, countr
     }
 
     fetchRecommendations()
-  }, [mood, genres, maxRuntime, country, retryCount])
+  }, [mood, genres, maxRuntime, country, providerId, retryCount, serviceKey])
 
   const handleRetry = () => {
     setRetryCount((prev) => prev + 1)
@@ -183,7 +192,7 @@ export default function RecommendationResults({ mood, genres, maxRuntime, countr
         <InfoIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
         <h3 className="text-xl font-bold mb-2">Couldn't Find Recommendations</h3>
         <p className="text-muted-foreground mb-6">
-          We encountered an issue while finding movies for you. Please try again with different preferences.
+          {error}
         </p>
         <Button onClick={handleRetry} className="bg-netflix-red hover:bg-netflix-red/90">
           <RefreshCcw className="mr-2 h-4 w-4" />
@@ -197,10 +206,12 @@ export default function RecommendationResults({ mood, genres, maxRuntime, countr
     return (
       <div className="text-center py-12 bg-card rounded-lg border p-6">
         <InfoIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-        <h3 className="text-xl font-bold mb-2">No Matches Found on Netflix {country.toUpperCase()}</h3>
+        <h3 className="text-xl font-bold mb-2">
+          No Matches Found on {serviceName} {country.toUpperCase()}
+        </h3>
         <p className="text-muted-foreground mb-6">
-          We couldn't find movies matching your criteria on Netflix in your selected country. Try adjusting your
-          preferences or selecting a different country.
+          We couldn't find movies matching your criteria on {serviceName} in your selected country. Try adjusting your
+          preferences, picking another platform, or selecting a different country.
         </p>
         <Button onClick={handleRetry} className="bg-netflix-red hover:bg-netflix-red/90">
           <RefreshCcw className="mr-2 h-4 w-4" />
@@ -212,10 +223,10 @@ export default function RecommendationResults({ mood, genres, maxRuntime, countr
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold">Your Personalized Netflix Recommendations</h2>
+      <h2 className="text-2xl font-bold">Your Personalized {serviceName} Recommendations</h2>
       <p className="text-muted-foreground">
-        These movies are available on Netflix in <span className="font-medium">{country.toUpperCase()}</span> and match
-        your mood and preferences.
+        These movies are available on <span className="font-medium">{serviceName}</span> in{" "}
+        <span className="font-medium">{country.toUpperCase()}</span> and match your mood and preferences.
       </p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -239,7 +250,7 @@ export default function RecommendationResults({ mood, genres, maxRuntime, countr
                     <div className="absolute top-2 right-2">
                       <Badge className="bg-netflix-red text-white">
                         <GlobeIcon className="h-3 w-3 mr-1" />
-                        Netflix
+                        {serviceName}
                       </Badge>
                     </div>
                   </div>

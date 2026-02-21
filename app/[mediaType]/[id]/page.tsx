@@ -6,15 +6,17 @@ import ContentRow from "@/components/content-row"
 import { Skeleton } from "@/components/ui/skeleton"
 
 interface MovieDetailPageProps {
-  params: {
+  params: Promise<{
     mediaType: string
     id: string
-  }
+  }>
 }
 
-export default function MovieDetailPage({ params }: MovieDetailPageProps) {
+export default async function MovieDetailPage({ params }: MovieDetailPageProps) {
+  const resolvedParams = await params
+
   // Validate media type
-  if (params.mediaType !== "movie" && params.mediaType !== "tv") {
+  if (resolvedParams.mediaType !== "movie" && resolvedParams.mediaType !== "tv") {
     notFound()
   }
 
@@ -22,16 +24,19 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
     <NetflixLayout>
       <div className="pt-16">
         <Suspense fallback={<DetailSkeleton />}>
-          <MovieDetail mediaType={params.mediaType} id={params.id} />
+          <MovieDetail mediaType={resolvedParams.mediaType} id={resolvedParams.id} />
         </Suspense>
 
         <div className="container mx-auto px-4 py-8 space-y-8">
           <Suspense fallback={<RowSkeleton title="Similar Titles" />}>
-            <ContentRow title="Similar Titles" endpoint={`${params.mediaType}/${params.id}/similar`} />
+            <ContentRow title="Similar Titles" endpoint={`${resolvedParams.mediaType}/${resolvedParams.id}/similar`} />
           </Suspense>
 
           <Suspense fallback={<RowSkeleton title="Recommended" />}>
-            <ContentRow title="Recommended" endpoint={`${params.mediaType}/${params.id}/recommendations`} />
+            <ContentRow
+              title="Recommended"
+              endpoint={`${resolvedParams.mediaType}/${resolvedParams.id}/recommendations`}
+            />
           </Suspense>
         </div>
       </div>

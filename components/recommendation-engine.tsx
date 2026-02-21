@@ -23,6 +23,7 @@ import {
   GlobeIcon,
 } from "lucide-react"
 import RecommendationResults from "./recommendation-results"
+import { DEFAULT_COUNTRY, DEFAULT_SERVICE_KEY, getServiceByKey } from "@/lib/streaming-options"
 
 interface MoodOption {
   id: string
@@ -101,26 +102,48 @@ export default function RecommendationEngine() {
   const [activeTab, setActiveTab] = useState("mood")
   const [showResults, setShowResults] = useState(false)
   const [isSearching, setIsSearching] = useState(false)
-  const [selectedCountry, setSelectedCountry] = useState<string>("us")
+  const [selectedCountry, setSelectedCountry] = useState<string>(DEFAULT_COUNTRY)
+  const [selectedServiceKey, setSelectedServiceKey] = useState<string>(DEFAULT_SERVICE_KEY)
+  const [selectedServiceName, setSelectedServiceName] = useState<string>(getServiceByKey(DEFAULT_SERVICE_KEY).label)
+  const [selectedProviderId, setSelectedProviderId] = useState<number>(getServiceByKey(DEFAULT_SERVICE_KEY).providerId)
   const { toast } = useToast()
 
-  // Listen for country changes
   useEffect(() => {
-    const handleCountryChange = (event: Event) => {
-      const customEvent = event as CustomEvent
-      setSelectedCountry(customEvent.detail)
+    const handleStreamingFiltersChange = (event: Event) => {
+      const customEvent = event as CustomEvent<{
+        serviceKey: string
+        serviceName: string
+        providerId: number
+        country: string
+      }>
+
+      if (!customEvent.detail) {
+        return
+      }
+
+      setSelectedServiceKey(customEvent.detail.serviceKey)
+      setSelectedServiceName(customEvent.detail.serviceName)
+      setSelectedProviderId(customEvent.detail.providerId)
+      setSelectedCountry(customEvent.detail.country)
     }
 
-    window.addEventListener("countrychange", handleCountryChange)
+    window.addEventListener("streamingfilterschange", handleStreamingFiltersChange)
 
-    // Load initial country from localStorage
-    const savedCountry = localStorage.getItem("selectedCountry")
+    const savedServiceKey = localStorage.getItem("selectedStreamingService") || DEFAULT_SERVICE_KEY
+    const savedService = getServiceByKey(savedServiceKey)
+    const savedCountry =
+      localStorage.getItem(`selectedCountry:${savedService.key}`) || localStorage.getItem("selectedCountry")
+
+    setSelectedServiceKey(savedService.key)
+    setSelectedServiceName(savedService.label)
+    setSelectedProviderId(savedService.providerId)
+
     if (savedCountry) {
       setSelectedCountry(savedCountry)
     }
 
     return () => {
-      window.removeEventListener("countrychange", handleCountryChange)
+      window.removeEventListener("streamingfilterschange", handleStreamingFiltersChange)
     }
   }, [])
 
@@ -187,7 +210,7 @@ export default function RecommendationEngine() {
 
             <Badge className="bg-netflix-red text-white border-0">
               <GlobeIcon className="h-3 w-3 mr-1" />
-              {selectedCountry.toUpperCase()} Netflix
+              {selectedCountry.toUpperCase()} {selectedServiceName}
             </Badge>
           </div>
 
@@ -201,6 +224,9 @@ export default function RecommendationEngine() {
           genres={selectedGenres}
           maxRuntime={contentLength}
           country={selectedCountry}
+          serviceName={selectedServiceName}
+          providerId={selectedProviderId}
+          serviceKey={selectedServiceKey}
         />
       </div>
     )
@@ -325,7 +351,7 @@ export default function RecommendationEngine() {
 
                 <Badge className="bg-netflix-red text-white border-0">
                   <GlobeIcon className="h-3 w-3 mr-1" />
-                  {selectedCountry.toUpperCase()} Netflix
+                  {selectedCountry.toUpperCase()} {selectedServiceName}
                 </Badge>
               </div>
             </div>

@@ -8,38 +8,57 @@ import { ClockIcon, CalendarIcon, PlayCircleIcon, UserIcon, CheckIcon, XIcon, Re
 import { Skeleton } from "@/components/ui/skeleton"
 import { useToast } from "@/hooks/use-toast"
 import Link from "next/link"
+import { DEFAULT_COUNTRY, DEFAULT_SERVICE_KEY, getServiceByKey } from "@/lib/streaming-options"
 
 interface MovieDetailProps {
   id: string
+  mediaType?: "movie" | "tv"
 }
 
-export default function MovieDetail({ id }: MovieDetailProps) {
+export default function MovieDetail({ id, mediaType = "movie" }: MovieDetailProps) {
   const [movie, setMovie] = useState<any>(null)
   const [similar, setSimilar] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [country, setCountry] = useState("us")
-  const [isAvailableOnNetflix, setIsAvailableOnNetflix] = useState(false)
+  const [country, setCountry] = useState(DEFAULT_COUNTRY)
+  const [selectedServiceName, setSelectedServiceName] = useState(getServiceByKey(DEFAULT_SERVICE_KEY).label)
+  const [selectedProviderId, setSelectedProviderId] = useState(getServiceByKey(DEFAULT_SERVICE_KEY).providerId)
+  const [isAvailableOnService, setIsAvailableOnService] = useState(false)
   const [retryCount, setRetryCount] = useState(0)
   const { toast } = useToast()
 
   useEffect(() => {
-    // Listen for country changes
-    const handleCountryChange = (event: Event) => {
-      const customEvent = event as CustomEvent
-      setCountry(customEvent.detail)
+    const handleStreamingFiltersChange = (event: Event) => {
+      const customEvent = event as CustomEvent<{
+        serviceName: string
+        providerId: number
+        country: string
+      }>
+
+      if (!customEvent.detail) {
+        return
+      }
+
+      setSelectedServiceName(customEvent.detail.serviceName)
+      setSelectedProviderId(customEvent.detail.providerId)
+      setCountry(customEvent.detail.country)
     }
 
-    window.addEventListener("countrychange", handleCountryChange)
+    window.addEventListener("streamingfilterschange", handleStreamingFiltersChange)
 
-    // Load initial country from localStorage
-    const savedCountry = localStorage.getItem("selectedCountry")
+    const savedServiceKey = localStorage.getItem("selectedStreamingService") || DEFAULT_SERVICE_KEY
+    const savedService = getServiceByKey(savedServiceKey)
+    const savedCountry =
+      localStorage.getItem(`selectedCountry:${savedService.key}`) || localStorage.getItem("selectedCountry")
+
+    setSelectedServiceName(savedService.label)
+    setSelectedProviderId(savedService.providerId)
     if (savedCountry) {
       setCountry(savedCountry)
     }
 
     return () => {
-      window.removeEventListener("countrychange", handleCountryChange)
+      window.removeEventListener("streamingfilterschange", handleStreamingFiltersChange)
     }
   }, [])
 
@@ -51,7 +70,7 @@ export default function MovieDetail({ id }: MovieDetailProps) {
 
         // Get movie details
         const detailsResponse = await fetch(
-          `/api/tmdb?endpoint=movie/${id}&append_to_response=credits,videos,watch/providers`,
+          `/api/tmdb?endpoint=${mediaType}/${id}&append_to_response=credits,videos,watch/providers`,
         )
 
         if (!detailsResponse.ok) {
@@ -70,12 +89,12 @@ export default function MovieDetail({ id }: MovieDetailProps) {
 
         setMovie(movieData)
 
-        // Check if available on Netflix in selected country
+        // Check if available on selected service in selected country.
         const watchProviders = movieData["watch/providers"]?.results?.[country]?.flatrate || []
-        setIsAvailableOnNetflix(watchProviders.some((provider: any) => provider.provider_id === 8))
+        setIsAvailableOnService(watchProviders.some((provider: any) => provider.provider_id === selectedProviderId))
 
-        // Get similar movies
-        const similarResponse = await fetch(`/api/tmdb?endpoint=movie/${id}/similar`)
+        // Get similar titles.
+        const similarResponse = await fetch(`/api/tmdb?endpoint=${mediaType}/${id}/similar`)
 
         if (similarResponse.ok) {
           const similarData = await similarResponse.json()
@@ -91,12 +110,12 @@ export default function MovieDetail({ id }: MovieDetailProps) {
     }
 
     fetchMovie()
-  }, [id, country, retryCount])
+  }, [country, id, mediaType, retryCount, selectedProviderId])
 
   const handleAddToWatchlist = () => {
     toast({
       title: "Added to watchlist",
-      description: `${movie?.title} has been added to your watchlist.`,
+      description: `${movie?.title || movie?.name} has been added to your watchlist.`,
     })
   }
 
@@ -138,7 +157,7 @@ export default function MovieDetail({ id }: MovieDetailProps) {
           <Card>
             <CardContent className="pt-6 text-center">
               <h2 className="text-2xl font-bold mb-4">Movie Not Found</h2>
-              <p className="text-muted-foreground mb-6">Sorry, we couldn't find the movie you're looking for.</p>
+              <p className="text-muted-foreground mb-6">Sorry, we couldn't find the title you're looking for.</p>
               <div className="flex justify-center gap-4">
                 <Button onClick={() => window.history.back()}>Go Back</Button>
                 <Button variant="outline" onClick={handleRetry}>
@@ -156,13 +175,16 @@ export default function MovieDetail({ id }: MovieDetailProps) {
   // Find trailer
   const trailer = movie.videos?.results?.find((video: any) => video.type === "Trailer" && video.site === "YouTube")
 
-  // Get release year
-  const releaseYear = movie.release_date ? new Date(movie.release_date).getFullYear() : "N/A"
+  const title = movie.title || movie.name || "Unknown Title"
+  const releaseDate = movie.release_date || movie.first_air_date
+  const releaseYear = releaseDate ? new Date(releaseDate).getFullYear() : "N/A"
+  const runtime = movie.runtime || movie.episode_run_time?.[0]
 
-  // Get director
   const director = movie.credits?.crew?.find((person: any) => person.job === "Director")
+  const creator = movie.created_by?.[0]
+  const creatorLabel = mediaType === "tv" ? "Creator" : "Director"
+  const creatorName = mediaType === "tv" ? creator?.name : director?.name
 
-  // Get top cast
   const topCast = movie.credits?.cast?.slice(0, 5) || []
 
   return (
@@ -174,7 +196,7 @@ export default function MovieDetail({ id }: MovieDetailProps) {
             <div className="absolute inset-0 opacity-30">
               <img
                 src={`https://image.tmdb.org/t/p/original${movie.backdrop_path}`}
-                alt={movie.title}
+                alt={title}
                 className="w-full h-full object-cover"
               />
             </div>
@@ -190,10 +212,10 @@ export default function MovieDetail({ id }: MovieDetailProps) {
           <div>
             <div className="rounded-lg overflow-hidden border shadow-xl">
               {movie.poster_path ? (
-                <img src={`https://image.tmdb.org/t/p/w500${movie.poster_path}`} alt={movie.title} className="w-full" />
+                <img src={`https://image.tmdb.org/t/p/w500${movie.poster_path}`} alt={title} className="w-full" />
               ) : (
                 <div className="aspect-[2/3] bg-muted flex items-center justify-center">
-                  <span className="text-3xl font-bold text-muted-foreground">{movie.title.charAt(0)}</span>
+                  <span className="text-3xl font-bold text-muted-foreground">{title.charAt(0)}</span>
                 </div>
               )}
             </div>
@@ -223,7 +245,7 @@ export default function MovieDetail({ id }: MovieDetailProps) {
                   <span className="text-muted-foreground">Runtime</span>
                   <div className="flex items-center">
                     <ClockIcon className="h-4 w-4 text-muted-foreground mr-1" />
-                    <span className="font-medium">{movie.runtime} min</span>
+                    <span className="font-medium">{runtime ? `${runtime} min` : "N/A"}</span>
                   </div>
                 </div>
 
@@ -236,9 +258,11 @@ export default function MovieDetail({ id }: MovieDetailProps) {
                 </div>
 
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Netflix {country.toUpperCase()}</span>
+                  <span className="text-muted-foreground">
+                    {selectedServiceName} {country.toUpperCase()}
+                  </span>
                   <div className="flex items-center">
-                    {isAvailableOnNetflix ? (
+                    {isAvailableOnService ? (
                       <>
                         <CheckIcon className="h-4 w-4 text-green-500 mr-1" />
                         <span className="font-medium text-green-500">Available</span>
@@ -258,7 +282,7 @@ export default function MovieDetail({ id }: MovieDetailProps) {
           {/* Details */}
           <div className="md:col-span-2 space-y-6">
             <div>
-              <h1 className="text-3xl md:text-4xl font-bold mb-2">{movie.title}</h1>
+              <h1 className="text-3xl md:text-4xl font-bold mb-2">{title}</h1>
               {movie.tagline && <p className="text-muted-foreground italic">{movie.tagline}</p>}
 
               {movie.genres && movie.genres.length > 0 && (
@@ -302,10 +326,10 @@ export default function MovieDetail({ id }: MovieDetailProps) {
               </div>
             )}
 
-            {director && (
+            {creatorName && (
               <div>
-                <h2 className="text-xl font-bold mb-2">Director</h2>
-                <p>{director.name}</p>
+                <h2 className="text-xl font-bold mb-2">{creatorLabel}</h2>
+                <p>{creatorName}</p>
               </div>
             )}
 
@@ -314,24 +338,26 @@ export default function MovieDetail({ id }: MovieDetailProps) {
                 <h2 className="text-xl font-bold mb-3">You Might Also Like</h2>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   {similar.map((movie) => (
-                    <Link key={movie.id} href={`/movie/${movie.id}`}>
+                    <Link key={movie.id} href={`/${mediaType}/${movie.id}`}>
                       <Card className="border-0 overflow-hidden card-hover">
                         <CardContent className="p-0">
                           <div className="aspect-[2/3] overflow-hidden">
                             {movie.poster_path ? (
                               <img
                                 src={`https://image.tmdb.org/t/p/w342${movie.poster_path}`}
-                                alt={movie.title}
+                                alt={movie.title || movie.name}
                                 className="w-full h-full object-cover image-hover"
                               />
                             ) : (
                               <div className="w-full h-full bg-muted flex items-center justify-center">
-                                <span className="text-xl font-bold text-muted-foreground">{movie.title.charAt(0)}</span>
+                                <span className="text-xl font-bold text-muted-foreground">
+                                  {(movie.title || movie.name).charAt(0)}
+                                </span>
                               </div>
                             )}
                           </div>
                           <div className="p-2">
-                            <p className="font-medium text-sm truncate">{movie.title}</p>
+                            <p className="font-medium text-sm truncate">{movie.title || movie.name}</p>
                             <div className="imdb-rating text-xs mt-1">IMDb {movie.vote_average.toFixed(1)}</div>
                           </div>
                         </CardContent>

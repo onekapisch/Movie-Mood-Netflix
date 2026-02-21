@@ -10,7 +10,14 @@ export async function GET(request: Request) {
 
   if (!TMDB_API_KEY) {
     console.error("TMDB API key not configured")
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: "TMDB_API_KEY_MISSING",
+        status_message:
+          "TMDB API key is not configured on the server. Add TMDB_API_KEY to your environment variables and restart.",
+      },
+      { status: 500 },
+    )
   }
 
   if (!endpoint) {
@@ -38,20 +45,34 @@ export async function GET(request: Request) {
       next: { revalidate: 3600 }, // Cache for 1 hour
     })
 
+    const data = await response.json().catch(() => null)
+
     if (!response.ok) {
-      throw new Error(`TMDB API error: ${response.status}`)
+      console.error("TMDB upstream error", {
+        endpoint,
+        status: response.status,
+        statusMessage: data?.status_message,
+      })
+
+      return NextResponse.json(
+        {
+          error: "TMDB_UPSTREAM_ERROR",
+          upstream_status: response.status,
+          status_message: data?.status_message || `TMDB API error: ${response.status}`,
+        },
+        { status: response.status },
+      )
     }
 
-    const data = await response.json()
     return NextResponse.json(data)
   } catch (error) {
     console.error("TMDB API error:", error)
     return NextResponse.json(
       {
-        results: [],
-        status_message: "Could not fetch data at this time. Please try again later.",
+        error: "TMDB_REQUEST_FAILED",
+        status_message: "Could not fetch data from TMDB at this time. Please try again later.",
       },
-      { status: 200 },
-    ) // Return empty results instead of error
+      { status: 502 },
+    )
   }
 }

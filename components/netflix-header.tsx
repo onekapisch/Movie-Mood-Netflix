@@ -11,7 +11,7 @@ const Header = () => {
 
   return (
     <header className="fixed top-0 left-0 right-0 bg-netflix-black/95 backdrop-blur-sm border-b border-gray-800 z-50">
-      <div className="container mx-auto px-4 py-3 flex items-center justify-between">
+      <div className="container mx-auto px-4 py-3 flex items-center justify-between gap-4">
         <Link href="/" className="flex items-center">
           <span className="text-white font-bold text-2xl">
             Movie<span className="text-netflix-red">Mood</span>
@@ -19,8 +19,8 @@ const Header = () => {
           <span className="bg-netflix-red text-white px-2 py-0.5 ml-2 text-xs rounded-full">by Kapisch</span>
         </Link>
 
-        {/* Country Selector - Centered on desktop */}
-        <div className="hidden md:block absolute left-1/2 transform -translate-x-1/2">
+        {/* Service + Country Selector */}
+        <div className="hidden md:flex flex-1 justify-center">
           <CountrySelector />
         </div>
 
