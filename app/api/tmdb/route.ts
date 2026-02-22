@@ -10,6 +10,7 @@ const ALLOWED_ENDPOINT_PATTERNS = [
   /^discover\/(movie|tv)$/,
   /^trending\/(all|movie|tv)\/(day|week)$/,
   /^genre\/(movie|tv)\/list$/,
+  /^(movie|tv)\/(popular|top_rated|upcoming|now_playing|airing_today|on_the_air)$/,
   /^(movie|tv)\/\d+$/,
   /^(movie|tv)\/\d+\/(similar|recommendations|videos|credits|watch\/providers|external_ids)$/,
 ]

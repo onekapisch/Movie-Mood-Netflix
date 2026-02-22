@@ -38,12 +38,15 @@ export default function DiscoverPageClient() {
   const [activeTab, setActiveTab] = useState<string>("trending")
   const [movies, setMovies] = useState<Movie[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     async function fetchMovies() {
       setLoading(true)
+      setError(null)
       try {
         let endpoint = "trending/movie/week"
+        const params = new URLSearchParams()
 
         if (activeTab === "popular") {
           endpoint = "movie/popular"
@@ -53,15 +56,23 @@ export default function DiscoverPageClient() {
           endpoint = "movie/upcoming"
         } else if (activeTab.startsWith("genre_")) {
           const genreId = activeTab.replace("genre_", "")
-          endpoint = `discover/movie?with_genres=${genreId}`
+          endpoint = "discover/movie"
+          params.set("with_genres", genreId)
         }
 
-        const response = await fetch(`/api/tmdb?endpoint=${endpoint}`)
+        const query = params.toString()
+        const response = await fetch(`/api/tmdb?endpoint=${endpoint}${query ? `&${query}` : ""}`)
         const data = await response.json()
+
+        if (!response.ok || data.error) {
+          throw new Error(data.status_message || data.error || "Failed to load discover movies")
+        }
 
         setMovies(data.results || [])
       } catch (error) {
         console.error("Error fetching movies:", error)
+        setMovies([])
+        setError(error instanceof Error ? error.message : "Failed to load discover movies")
       } finally {
         setLoading(false)
       }
@@ -109,6 +120,11 @@ export default function DiscoverPageClient() {
                   {[...Array(12)].map((_, i) => (
                     <div key={i} className="aspect-[2/3] bg-muted rounded-lg animate-pulse"></div>
                   ))}
+                </div>
+              ) : error ? (
+                <div className="rounded-lg border p-6 bg-card">
+                  <p className="text-netflix-red font-medium mb-2">Could not load this category</p>
+                  <p className="text-sm text-muted-foreground">{error}</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
