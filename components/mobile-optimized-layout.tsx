@@ -6,7 +6,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { useMobile } from "@/hooks/use-mobile"
+import { useIsMobile } from "@/hooks/use-mobile"
 import { Menu, Filter, User, Heart, Clock, Settings } from "lucide-react"
 
 interface MobileLayoutProps {
@@ -17,7 +17,7 @@ interface MobileLayoutProps {
 }
 
 export default function MobileOptimizedLayout({ children, title, filters, profile }: MobileLayoutProps) {
-  const isMobile = useMobile()
+  const isMobile = useIsMobile()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isFiltersOpen, setIsFiltersOpen] = useState(false)
   const [isProfileOpen, setIsProfileOpen] = useState(false)

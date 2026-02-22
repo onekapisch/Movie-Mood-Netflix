@@ -182,7 +182,7 @@ export default function FeaturedMovies() {
                   <div className="p-3">
                     <h3 className="font-medium truncate">{movie.title}</h3>
                     <div className="flex items-center mt-1">
-                      <div className="imdb-rating text-xs">IMDb {movie.vote_average.toFixed(1)}</div>
+                      <div className="imdb-rating text-xs">TMDB {movie.vote_average.toFixed(1)}</div>
                     </div>
                   </div>
                 </CardContent>

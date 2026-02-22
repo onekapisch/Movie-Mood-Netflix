@@ -1,16 +1,74 @@
 import { NextResponse } from "next/server"
-import { generateText } from "ai"
+import { generateObject } from "ai"
 import { openai } from "@ai-sdk/openai"
+import { z } from "zod"
+import { checkRateLimit, getRequestIp } from "@/lib/rate-limit"
+
+const requestSchema = z.object({
+  movieId: z.union([z.number().int().nonnegative(), z.string().regex(/^\d+$/)]).optional(),
+  title: z.string().trim().min(1).max(200),
+  overview: z.string().trim().min(1).max(4000),
+  genres: z.array(z.string().trim().min(1).max(50)).max(20).default([]),
+})
+
+const analysisSchema = z.object({
+  mood: z.array(z.string()).max(5),
+  themes: z.array(z.string()).max(10),
+  similarContent: z.array(z.string()).max(10),
+  viewingContext: z.array(z.string()).max(6),
+  contentWarnings: z.array(z.string()).max(10),
+  analysis: z.string().max(2000),
+})
 
 export async function POST(request: Request) {
   try {
-    const { movieId, title, overview, genres } = await request.json()
+    const ip = getRequestIp(request)
+    const rateLimit = checkRateLimit({
+      key: `analyze:${ip}`,
+      limit: 12,
+      windowMs: 60_000,
+    })
 
-    if (!title || !overview) {
-      return NextResponse.json({ error: "Missing required movie information" }, { status: 400 })
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        {
+          error: "RATE_LIMITED",
+          status_message: "Too many analysis requests. Please try again in a minute.",
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(rateLimit.retryAfterSeconds),
+          },
+        },
+      )
     }
 
-    // Construct the prompt for the AI
+    if (!process.env.OPENAI_API_KEY) {
+      return NextResponse.json(
+        {
+          error: "OPENAI_API_KEY_MISSING",
+          status_message: "AI analysis is not configured on the server.",
+        },
+        { status: 503 },
+      )
+    }
+
+    const body = await request.json()
+    const parsed = requestSchema.safeParse(body)
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        {
+          error: "INVALID_REQUEST",
+          details: parsed.error.flatten(),
+        },
+        { status: 400 },
+      )
+    }
+
+    const { movieId, title, overview, genres } = parsed.data
+
     const prompt = `
       Analyze the following movie/show and provide insights:
       
@@ -36,22 +94,13 @@ export async function POST(request: Request) {
       }
     `
 
-    // Generate analysis using AI
-    const { text } = await generateText({
+    const { object: analysis } = await generateObject({
       model: openai("gpt-4o"),
       prompt,
+      schema: analysisSchema,
       temperature: 0.7,
-      maxTokens: 1000,
+      maxOutputTokens: 1000,
     })
-
-    // Parse the JSON response
-    let analysis
-    try {
-      analysis = JSON.parse(text)
-    } catch (error) {
-      console.error("Error parsing AI response:", error)
-      return NextResponse.json({ error: "Failed to parse AI analysis" }, { status: 500 })
-    }
 
     // Store the analysis in the database for future use
     // This would be implemented in a real application
@@ -63,6 +112,12 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     console.error("Content analysis error:", error)
-    return NextResponse.json({ error: "Failed to analyze content" }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: "ANALYSIS_FAILED",
+        status_message: "Failed to analyze content",
+      },
+      { status: 500 },
+    )
   }
 }

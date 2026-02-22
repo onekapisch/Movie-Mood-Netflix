@@ -29,9 +29,7 @@ const formSchema = z.object({
     message: "Group watch name must be at least 2 characters.",
   }),
   description: z.string().optional(),
-  date: z.date({
-    required_error: "Please select a date for your watch party.",
-  }),
+  date: z.date(),
   time: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, {
     message: "Please enter a valid time in 24-hour format (HH:MM).",
   }),

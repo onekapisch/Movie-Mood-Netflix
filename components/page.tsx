@@ -1,10 +1,10 @@
-import UserPreferencesForm from "./user-preferences-form.tsx"
-import GroupWatchCreator from "./group-watch-creator.tsx"
-import AdvancedFilters from "./advanced-filters.tsx"
-import SmartWatchlist from "./smart-watchlist.tsx"
-import ViewingAnalytics from "./viewing-analytics.tsx"
-import ContentAnalysis from "./content-analysis.tsx"
-import MoodPicker from "./mood-picker.tsx"
+import UserPreferencesForm from "./user-preferences-form"
+import GroupWatchCreator from "./group-watch-creator"
+import AdvancedFilters from "./advanced-filters"
+import SmartWatchlist from "./smart-watchlist"
+import ViewingAnalytics from "./viewing-analytics"
+import ContentAnalysis from "./content-analysis"
+import MoodPicker from "./mood-picker"
 
 export default function Page() {
   const handleMoodSelect = (mood: string, energy: string, contentLength: number) => {

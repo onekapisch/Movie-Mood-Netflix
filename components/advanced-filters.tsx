@@ -29,15 +29,17 @@ const languages = ["English", "Spanish", "French", "German", "Italian", "Japanes
 
 const ratings = ["G", "PG", "PG-13", "R", "NC-17", "TV-Y", "TV-G", "TV-14", "TV-MA"]
 
+type AdvancedFilterState = {
+  genres: string[]
+  languages: string[]
+  ratings: string[]
+  releaseYears: [number, number]
+  runtime: [number, number]
+}
+
 export default function AdvancedFilters({ onFilterChange }: { onFilterChange: (filters: any) => void }) {
   const [isOpen, setIsOpen] = useState(false)
-  const [activeFilters, setActiveFilters] = useState<{
-    genres: string[]
-    languages: string[]
-    ratings: string[]
-    releaseYears: [number, number]
-    runtime: [number, number]
-  }>({
+  const [activeFilters, setActiveFilters] = useState<AdvancedFilterState>({
     genres: [],
     languages: ["English"],
     ratings: [],
@@ -67,7 +69,7 @@ export default function AdvancedFilters({ onFilterChange }: { onFilterChange: (f
   }
 
   const clearFilters = () => {
-    const defaultFilters = {
+    const defaultFilters: AdvancedFilterState = {
       genres: [],
       languages: ["English"],
       ratings: [],

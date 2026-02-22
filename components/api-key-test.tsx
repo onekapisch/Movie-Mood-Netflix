@@ -84,9 +84,7 @@ export default function ApiKeyTest() {
         )}
       </CardContent>
       <CardFooter className="flex justify-between">
-        <div className="text-xs text-muted-foreground">
-          API Key: {process.env.TMDB_API_KEY ? "609cce7897810c576d132f2b7165c3de" : "Not set"}
-        </div>
+        <div className="text-xs text-muted-foreground">Server-side TMDB configuration check</div>
         {isValid && <Badge className="bg-green-500">Ready to use</Badge>}
       </CardFooter>
     </Card>

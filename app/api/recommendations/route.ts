@@ -1,5 +1,28 @@
 import { NextResponse } from "next/server"
 import { kv } from "@vercel/kv"
+import { z } from "zod"
+
+const requestSchema = z.object({
+  userId: z.string().min(1),
+  preferences: z
+    .object({
+      genres: z.array(z.string()).default([]),
+      directors: z.array(z.string()).default([]),
+      actors: z.array(z.string()).default([]),
+    })
+    .default({ genres: [], directors: [], actors: [] }),
+  watchHistory: z.array(z.union([z.string(), z.number()])).default([]),
+  currentMood: z.string().optional(),
+  timeAvailable: z.number().int().positive().optional(),
+})
+
+type CatalogContent = {
+  id: string | number
+  genres?: string[]
+  director?: string
+  cast?: string[]
+  runtime?: number
+}
 
 // Sample algorithm weights - in production you'd tune these based on user data
 const WEIGHTS = {
@@ -17,10 +40,17 @@ const WEIGHTS = {
 
 export async function POST(request: Request) {
   try {
-    const { userId, preferences, watchHistory, currentMood, timeAvailable } = await request.json()
+    const parsedBody = requestSchema.safeParse(await request.json())
+
+    if (!parsedBody.success) {
+      return NextResponse.json({ error: "Invalid recommendation request" }, { status: 400 })
+    }
+
+    const { userId, preferences, watchHistory, currentMood, timeAvailable } = parsedBody.data
 
     // Fetch user data from KV store
     const userData = await kv.get(`user:${userId}`)
+    void userData
 
     // Get time context
     const now = new Date()
@@ -28,53 +58,58 @@ export async function POST(request: Request) {
     const weekday = now.getDay()
 
     // Fetch content catalog (in production, this would be from a database)
-    const catalog = await kv.get("netflix:catalog")
+    const rawCatalog = await kv.get("netflix:catalog")
 
-    if (!catalog) {
+    if (!Array.isArray(rawCatalog)) {
       return NextResponse.json({ error: "Content catalog not available" }, { status: 500 })
     }
 
+    const catalog = rawCatalog as CatalogContent[]
+
     // Apply multi-factor recommendation algorithm
-    const recommendations = catalog.map((content: any) => {
+    const recommendations = catalog.map((content) => {
       let score = 0
+      const contentGenres = Array.isArray(content.genres) ? content.genres : []
+      const contentCast = Array.isArray(content.cast) ? content.cast : []
+      const contentRuntime = typeof content.runtime === "number" ? content.runtime : undefined
 
       // Genre match
-      if (preferences.genres.some((g: string) => content.genres.includes(g))) {
+      if (preferences.genres.some((g) => contentGenres.includes(g))) {
         score += WEIGHTS.genre
       }
 
       // Director match
-      if (preferences.directors.includes(content.director)) {
+      if (content.director && preferences.directors.includes(content.director)) {
         score += WEIGHTS.director
       }
 
       // Actor match
-      if (content.cast.some((actor: string) => preferences.actors.includes(actor))) {
+      if (contentCast.some((actor) => preferences.actors.includes(actor))) {
         score += WEIGHTS.actor
       }
 
       // Content length appropriate for available time
-      if (timeAvailable && content.runtime <= timeAvailable) {
+      if (timeAvailable && contentRuntime !== undefined && contentRuntime <= timeAvailable) {
         score += WEIGHTS.contentLength
       }
 
       // Mood matching
-      if (currentMood === "happy" && (content.genres.includes("comedy") || content.genres.includes("family"))) {
+      if (currentMood === "happy" && (contentGenres.includes("comedy") || contentGenres.includes("family"))) {
         score += 0.3
       } else if (
         currentMood === "thoughtful" &&
-        (content.genres.includes("drama") || content.genres.includes("documentary"))
+        (contentGenres.includes("drama") || contentGenres.includes("documentary"))
       ) {
         score += 0.3
       }
 
       // Time of day context
-      if ((hour >= 20 || hour <= 2) && content.genres.includes("horror")) {
+      if ((hour >= 20 || hour <= 2) && contentGenres.includes("horror")) {
         score += WEIGHTS.timeOfDay // Horror movies score higher at night
       }
 
       // Weekend vs weekday
-      if ((weekday === 0 || weekday === 6) && content.runtime > 120) {
+      if ((weekday === 0 || weekday === 6) && contentRuntime !== undefined && contentRuntime > 120) {
         score += WEIGHTS.weekday // Longer movies score higher on weekends
       }
 
@@ -90,7 +125,7 @@ export async function POST(request: Request) {
     })
 
     // Sort by score and return top recommendations
-    const topRecommendations = recommendations.sort((a: any, b: any) => b.score - a.score).slice(0, 10)
+    const topRecommendations = recommendations.sort((a, b) => b.score - a.score).slice(0, 10)
 
     return NextResponse.json({ recommendations: topRecommendations })
   } catch (error) {

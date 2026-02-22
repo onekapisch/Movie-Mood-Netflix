@@ -15,6 +15,11 @@ interface RecommendationResultsProps {
   serviceName: string
   providerId: number
   serviceKey: string
+  sortBy: string
+  minRating: number
+  minVotes: number
+  releaseWindow: string
+  language: string
 }
 
 interface Movie {
@@ -22,10 +27,63 @@ interface Movie {
   title: string
   poster_path: string
   vote_average: number
+  popularity?: number
   runtime?: number
   release_date: string
   genre_ids: number[]
   imdb_id?: string
+}
+
+function getTmdbSortBy(mood: string, sortBy: string): string {
+  if (sortBy === "rating_desc") return "vote_average.desc"
+  if (sortBy === "popularity_desc") return "popularity.desc"
+  if (sortBy === "newest_desc") return "primary_release_date.desc"
+  if (sortBy === "oldest_asc") return "primary_release_date.asc"
+
+  // Default "best_match" behavior falls back to mood-aware sorting.
+  if (mood === "happy" || mood === "excited") return "popularity.desc"
+  if (mood === "sad" || mood === "thoughtful") return "vote_average.desc"
+  return "vote_count.desc"
+}
+
+function getReleaseDateRange(releaseWindow: string): { gte?: string; lte?: string } {
+  const currentYear = new Date().getFullYear()
+
+  if (releaseWindow === "last_3_years") {
+    return { gte: `${currentYear - 3}-01-01` }
+  }
+
+  if (releaseWindow === "last_10_years") {
+    return { gte: `${currentYear - 10}-01-01` }
+  }
+
+  if (releaseWindow === "classics") {
+    return { lte: "2000-12-31" }
+  }
+
+  return {}
+}
+
+function sortClientSideResults(results: Movie[], sortBy: string): Movie[] {
+  const list = [...results]
+
+  if (sortBy === "rating_desc") {
+    return list.sort((a, b) => b.vote_average - a.vote_average)
+  }
+
+  if (sortBy === "popularity_desc") {
+    return list.sort((a, b) => (b.popularity || 0) - (a.popularity || 0))
+  }
+
+  if (sortBy === "newest_desc") {
+    return list.sort((a, b) => new Date(b.release_date || "1900-01-01").getTime() - new Date(a.release_date || "1900-01-01").getTime())
+  }
+
+  if (sortBy === "oldest_asc") {
+    return list.sort((a, b) => new Date(a.release_date || "2100-01-01").getTime() - new Date(b.release_date || "2100-01-01").getTime())
+  }
+
+  return list
 }
 
 export default function RecommendationResults({
@@ -36,6 +94,11 @@ export default function RecommendationResults({
   serviceName,
   providerId,
   serviceKey,
+  sortBy,
+  minRating,
+  minVotes,
+  releaseWindow,
+  language,
 }: RecommendationResultsProps) {
   const [results, setResults] = useState<Movie[]>([])
   const [loading, setLoading] = useState(true)
@@ -57,13 +120,26 @@ export default function RecommendationResults({
           params.append("with_genres", genres.join(","))
         }
 
-        // Set sort based on mood
-        if (mood === "happy" || mood === "excited") {
-          params.append("sort_by", "popularity.desc")
-        } else if (mood === "sad" || mood === "thoughtful") {
-          params.append("sort_by", "vote_average.desc")
-        } else {
-          params.append("sort_by", "vote_count.desc")
+        params.append("sort_by", getTmdbSortBy(mood, sortBy))
+
+        if (minRating > 0) {
+          params.append("vote_average.gte", String(minRating))
+        }
+
+        if (minVotes > 0) {
+          params.append("vote_count.gte", String(minVotes))
+        }
+
+        const releaseRange = getReleaseDateRange(releaseWindow)
+        if (releaseRange.gte) {
+          params.append("primary_release_date.gte", releaseRange.gte)
+        }
+        if (releaseRange.lte) {
+          params.append("primary_release_date.lte", releaseRange.lte)
+        }
+
+        if (language !== "any") {
+          params.append("with_original_language", language)
         }
 
         // Add country parameter for regional availability.
@@ -92,8 +168,26 @@ export default function RecommendationResults({
           if (genres.length > 0) {
             fallbackParams.append("with_genres", genres.join(","))
           }
-          fallbackParams.append("sort_by", "popularity.desc")
+          fallbackParams.append("sort_by", getTmdbSortBy(mood, sortBy))
           fallbackParams.append("region", country.toUpperCase())
+
+          if (minRating > 0) {
+            fallbackParams.append("vote_average.gte", String(minRating))
+          }
+          if (minVotes > 0) {
+            fallbackParams.append("vote_count.gte", String(minVotes))
+          }
+
+          if (releaseRange.gte) {
+            fallbackParams.append("primary_release_date.gte", releaseRange.gte)
+          }
+          if (releaseRange.lte) {
+            fallbackParams.append("primary_release_date.lte", releaseRange.lte)
+          }
+
+          if (language !== "any") {
+            fallbackParams.append("with_original_language", language)
+          }
 
           const fallbackResponse = await fetch(`/api/tmdb?endpoint=${endpoint}&${fallbackParams.toString()}`)
           if (fallbackResponse.ok) {
@@ -119,7 +213,7 @@ export default function RecommendationResults({
 
               const detailedMovies = await Promise.all(detailedMoviesPromises)
               const filteredResults = detailedMovies.filter((movie) => !movie.runtime || movie.runtime <= maxRuntime)
-              setResults(filteredResults.slice(0, 6))
+              setResults(sortClientSideResults(filteredResults, sortBy).slice(0, 6))
               return
             }
           }
@@ -148,7 +242,7 @@ export default function RecommendationResults({
 
         const detailedMovies = await Promise.all(detailedMoviesPromises)
         const filteredResults = detailedMovies.filter((movie) => !movie.runtime || movie.runtime <= maxRuntime)
-        setResults(filteredResults.slice(0, 6))
+        setResults(sortClientSideResults(filteredResults, sortBy).slice(0, 6))
       } catch (err: any) {
         console.error("Error fetching recommendations:", err)
         setError(err.message)
@@ -159,7 +253,20 @@ export default function RecommendationResults({
     }
 
     fetchRecommendations()
-  }, [mood, genres, maxRuntime, country, providerId, retryCount, serviceKey])
+  }, [
+    mood,
+    genres,
+    maxRuntime,
+    country,
+    providerId,
+    retryCount,
+    serviceKey,
+    sortBy,
+    minRating,
+    minVotes,
+    releaseWindow,
+    language,
+  ])
 
   const handleRetry = () => {
     setRetryCount((prev) => prev + 1)
@@ -257,7 +364,7 @@ export default function RecommendationResults({
                   <div className="w-full md:w-3/5 p-4 flex flex-col">
                     <h3 className="font-bold text-lg mb-1">{movie.title}</h3>
                     <div className="flex items-center mb-2">
-                      <div className="imdb-rating mr-2">IMDb {movie.vote_average.toFixed(1)}</div>
+                      <div className="imdb-rating mr-2">TMDB {movie.vote_average.toFixed(1)}</div>
                       {movie.runtime && (
                         <Badge variant="outline" className="text-xs">
                           {movie.runtime} min
@@ -276,9 +383,9 @@ export default function RecommendationResults({
       </div>
 
       <div className="flex justify-center mt-8">
-        <Button variant="outline" onClick={() => (window.location.href = "/discover")}>
-          Explore More Movies
-        </Button>
+        <Link href="/discover">
+          <Button variant="outline">Explore More Movies</Button>
+        </Link>
       </div>
     </div>
   )

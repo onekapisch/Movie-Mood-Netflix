@@ -3,6 +3,7 @@
 import type React from "react"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Play, Plus, ThumbsUp, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { toast } from "@/hooks/use-toast"
@@ -16,6 +17,7 @@ interface ContentCardProps {
 
 export default function ContentCard({ id, title, posterPath, mediaType }: ContentCardProps) {
   const [isHovered, setIsHovered] = useState(false)
+  const router = useRouter()
 
   const handleAddToList = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -36,7 +38,7 @@ export default function ContentCard({ id, title, posterPath, mediaType }: Conten
   const handleMoreInfo = (e: React.MouseEvent) => {
     e.stopPropagation()
     // In a real app, this would open a modal with more details
-    window.location.href = `/${mediaType}/${id}`
+    router.push(`/${mediaType}/${id}`)
   }
 
   return (
@@ -64,22 +66,37 @@ export default function ContentCard({ id, title, posterPath, mediaType }: Conten
           {isHovered && (
             <div className="absolute inset-0 flex flex-col">
               <div className="flex-1 flex items-center justify-center">
-                <Button className="netflix-button rounded-full w-12 h-12 p-0">
+                <Button className="netflix-button rounded-full w-12 h-12 p-0" onClick={handleMoreInfo}>
                   <Play className="h-6 w-6" />
                 </Button>
               </div>
               <div className="p-2 bg-netflix-dark">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex gap-2">
-                    <Button variant="ghost" size="icon" className="rounded-full bg-white/20 hover:bg-white/30">
-                      <Plus className="h-4 w-4" onClick={handleAddToList} />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="rounded-full bg-white/20 hover:bg-white/30"
+                      onClick={handleAddToList}
+                    >
+                      <Plus className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="rounded-full bg-white/20 hover:bg-white/30">
-                      <ThumbsUp className="h-4 w-4" onClick={handleLike} />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="rounded-full bg-white/20 hover:bg-white/30"
+                      onClick={handleLike}
+                    >
+                      <ThumbsUp className="h-4 w-4" />
                     </Button>
                   </div>
-                  <Button variant="ghost" size="icon" className="rounded-full bg-white/20 hover:bg-white/30">
-                    <ChevronDown className="h-4 w-4" onClick={handleMoreInfo} />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="rounded-full bg-white/20 hover:bg-white/30"
+                    onClick={handleMoreInfo}
+                  >
+                    <ChevronDown className="h-4 w-4" />
                   </Button>
                 </div>
                 <div className="text-xs">

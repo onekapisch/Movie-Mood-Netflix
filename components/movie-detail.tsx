@@ -237,7 +237,7 @@ export default function MovieDetail({ id, mediaType = "movie" }: MovieDetailProp
 
               <div className="py-4 space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">IMDb Rating</span>
+                  <span className="text-muted-foreground">TMDB Rating</span>
                   <div className="imdb-rating">{movie.vote_average?.toFixed(1)}/10</div>
                 </div>
 
@@ -358,7 +358,7 @@ export default function MovieDetail({ id, mediaType = "movie" }: MovieDetailProp
                           </div>
                           <div className="p-2">
                             <p className="font-medium text-sm truncate">{movie.title || movie.name}</p>
-                            <div className="imdb-rating text-xs mt-1">IMDb {movie.vote_average.toFixed(1)}</div>
+                            <div className="imdb-rating text-xs mt-1">TMDB {movie.vote_average.toFixed(1)}</div>
                           </div>
                         </CardContent>
                       </Card>

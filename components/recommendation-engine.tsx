@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Slider } from "@/components/ui/slider"
 import { Badge } from "@/components/ui/badge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 import {
   HeartIcon,
@@ -21,6 +22,8 @@ import {
   SparklesIcon,
   ThumbsUpIcon,
   GlobeIcon,
+  SlidersHorizontalIcon,
+  StarIcon,
 } from "lucide-react"
 import RecommendationResults from "./recommendation-results"
 import { DEFAULT_COUNTRY, DEFAULT_SERVICE_KEY, getServiceByKey } from "@/lib/streaming-options"
@@ -95,6 +98,32 @@ const genreOptions: GenreOption[] = [
   { id: "53", label: "Thriller" },
 ]
 
+const sortOptions = [
+  { id: "best_match", label: "Best Match (Mood Based)" },
+  { id: "rating_desc", label: "Highest IMDb-Style Rating" },
+  { id: "popularity_desc", label: "Most Popular" },
+  { id: "newest_desc", label: "Newest Releases" },
+  { id: "oldest_asc", label: "Oldest Releases" },
+]
+
+const releaseWindowOptions = [
+  { id: "any", label: "Any Time" },
+  { id: "last_3_years", label: "Last 3 Years" },
+  { id: "last_10_years", label: "Last 10 Years" },
+  { id: "classics", label: "Classics (2000 or older)" },
+]
+
+const languageOptions = [
+  { id: "any", label: "Any Language" },
+  { id: "en", label: "English" },
+  { id: "es", label: "Spanish" },
+  { id: "fr", label: "French" },
+  { id: "de", label: "German" },
+  { id: "ja", label: "Japanese" },
+  { id: "ko", label: "Korean" },
+  { id: "hi", label: "Hindi" },
+]
+
 export default function RecommendationEngine() {
   const [selectedMood, setSelectedMood] = useState<string | null>(null)
   const [selectedGenres, setSelectedGenres] = useState<string[]>([])
@@ -106,6 +135,11 @@ export default function RecommendationEngine() {
   const [selectedServiceKey, setSelectedServiceKey] = useState<string>(DEFAULT_SERVICE_KEY)
   const [selectedServiceName, setSelectedServiceName] = useState<string>(getServiceByKey(DEFAULT_SERVICE_KEY).label)
   const [selectedProviderId, setSelectedProviderId] = useState<number>(getServiceByKey(DEFAULT_SERVICE_KEY).providerId)
+  const [sortBy, setSortBy] = useState<string>("best_match")
+  const [minRating, setMinRating] = useState<number>(6.5)
+  const [minVotes, setMinVotes] = useState<number>(300)
+  const [releaseWindow, setReleaseWindow] = useState<string>("any")
+  const [language, setLanguage] = useState<string>("any")
   const { toast } = useToast()
 
   useEffect(() => {
@@ -184,6 +218,11 @@ export default function RecommendationEngine() {
     setSelectedMood(null)
     setSelectedGenres([])
     setContentLength(120)
+    setSortBy("best_match")
+    setMinRating(6.5)
+    setMinVotes(300)
+    setReleaseWindow("any")
+    setLanguage("any")
     setActiveTab("mood")
   }
 
@@ -212,6 +251,13 @@ export default function RecommendationEngine() {
               <GlobeIcon className="h-3 w-3 mr-1" />
               {selectedCountry.toUpperCase()} {selectedServiceName}
             </Badge>
+
+            <Badge variant="outline">
+              <StarIcon className="h-3 w-3 mr-1" />
+              {minRating.toFixed(1)}+
+            </Badge>
+
+            <Badge variant="outline">{sortOptions.find((option) => option.id === sortBy)?.label}</Badge>
           </div>
 
           <Button onClick={resetSearch} variant="outline" size="sm">
@@ -227,6 +273,11 @@ export default function RecommendationEngine() {
           serviceName={selectedServiceName}
           providerId={selectedProviderId}
           serviceKey={selectedServiceKey}
+          sortBy={sortBy}
+          minRating={minRating}
+          minVotes={minVotes}
+          releaseWindow={releaseWindow}
+          language={language}
         />
       </div>
     )
@@ -308,7 +359,9 @@ export default function RecommendationEngine() {
           </TabsContent>
 
           <TabsContent value="length" className="space-y-6">
-            <p className="text-center text-muted-foreground mb-6">How much time do you have available for watching?</p>
+            <p className="text-center text-muted-foreground mb-6">
+              How much time do you have available and how should we rank the results?
+            </p>
 
             <div className="space-y-4">
               <h3 className="font-medium text-center">Content Length: {contentLength} minutes</h3>
@@ -329,6 +382,87 @@ export default function RecommendationEngine() {
             </div>
 
             <div className="bg-secondary rounded-lg p-4 mt-8">
+              <div className="flex items-center gap-2 mb-4">
+                <SlidersHorizontalIcon className="h-4 w-4 text-netflix-red" />
+                <h3 className="font-medium">Advanced Filters</h3>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Sort Results</p>
+                  <Select value={sortBy} onValueChange={setSortBy}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sort by" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sortOptions.map((option) => (
+                        <SelectItem key={option.id} value={option.id}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Minimum Vote Count</p>
+                  <Select value={String(minVotes)} onValueChange={(value) => setMinVotes(Number(value))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Vote count threshold" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="50">50+ votes</SelectItem>
+                      <SelectItem value="100">100+ votes</SelectItem>
+                      <SelectItem value="300">300+ votes</SelectItem>
+                      <SelectItem value="1000">1000+ votes</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Release Window</p>
+                  <Select value={releaseWindow} onValueChange={setReleaseWindow}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Release window" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {releaseWindowOptions.map((option) => (
+                        <SelectItem key={option.id} value={option.id}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Original Language</p>
+                  <Select value={language} onValueChange={setLanguage}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Language" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {languageOptions.map((option) => (
+                        <SelectItem key={option.id} value={option.id}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-3 mb-6">
+                  <p className="text-sm font-medium">Minimum TMDB Rating: {minRating.toFixed(1)}</p>
+                <Slider
+                  min={0}
+                  max={10}
+                  step={0.5}
+                  value={[minRating]}
+                  onValueChange={(value) => setMinRating(value[0])}
+                />
+              </div>
+
               <h3 className="font-medium mb-2">Your Selection</h3>
               <div className="flex flex-wrap gap-2 mb-4">
                 {selectedMood && (
@@ -353,6 +487,19 @@ export default function RecommendationEngine() {
                   <GlobeIcon className="h-3 w-3 mr-1" />
                   {selectedCountry.toUpperCase()} {selectedServiceName}
                 </Badge>
+
+                <Badge variant="outline">
+                  <StarIcon className="h-3 w-3 mr-1" />
+                  {minRating.toFixed(1)}+
+                </Badge>
+
+                <Badge variant="outline">{sortOptions.find((option) => option.id === sortBy)?.label}</Badge>
+
+                <Badge variant="outline">{releaseWindowOptions.find((option) => option.id === releaseWindow)?.label}</Badge>
+
+                {language !== "any" && (
+                  <Badge variant="outline">{languageOptions.find((option) => option.id === language)?.label}</Badge>
+                )}
               </div>
             </div>
 
