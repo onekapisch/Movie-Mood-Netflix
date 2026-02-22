@@ -12,6 +12,7 @@ import {
   getValidCountryForService,
 } from "@/lib/streaming-options"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { toast } from "@/hooks/use-toast"
 
 const STREAMING_SERVICE_STORAGE_KEY = "selectedStreamingService"
 const LEGACY_COUNTRY_STORAGE_KEY = "selectedCountry"
@@ -42,7 +43,7 @@ export default function CountrySelector() {
     localStorage.setItem(getServiceCountryStorageKey(initialServiceKey), initialCountry)
     localStorage.setItem(LEGACY_COUNTRY_STORAGE_KEY, initialCountry)
 
-    emitPreferenceChange(initialServiceKey, initialCountry)
+    emitPreferenceChange(initialServiceKey, initialCountry, "init")
   }, [])
 
   const handleServiceChange = (nextServiceKey: string) => {
@@ -57,7 +58,12 @@ export default function CountrySelector() {
     localStorage.setItem(getServiceCountryStorageKey(validServiceKey), nextCountry)
     localStorage.setItem(LEGACY_COUNTRY_STORAGE_KEY, nextCountry)
 
-    emitPreferenceChange(validServiceKey, nextCountry)
+    emitPreferenceChange(validServiceKey, nextCountry, "user")
+    toast({
+      title: "Preferences updated",
+      description: `Showing ${getServiceByKey(validServiceKey).label} in ${getCountryByCode(nextCountry).label}`,
+      duration: 1800,
+    })
   }
 
   const handleCountryChange = (nextCountry: string) => {
@@ -67,7 +73,12 @@ export default function CountrySelector() {
     localStorage.setItem(getServiceCountryStorageKey(selectedServiceKey), validCountry)
     localStorage.setItem(LEGACY_COUNTRY_STORAGE_KEY, validCountry)
 
-    emitPreferenceChange(selectedServiceKey, validCountry)
+    emitPreferenceChange(selectedServiceKey, validCountry, "user")
+    toast({
+      title: "Preferences updated",
+      description: `Showing ${selectedService.label} in ${getCountryByCode(validCountry).label}`,
+      duration: 1800,
+    })
   }
 
   const selectedService = getServiceByKey(selectedServiceKey)
@@ -116,7 +127,7 @@ export default function CountrySelector() {
   )
 }
 
-function emitPreferenceChange(serviceKey: string, country: string) {
+function emitPreferenceChange(serviceKey: string, country: string, reason: "init" | "user" = "user") {
   const service = getServiceByKey(serviceKey)
 
   window.dispatchEvent(
@@ -126,6 +137,7 @@ function emitPreferenceChange(serviceKey: string, country: string) {
         serviceName: service.label,
         providerId: service.providerId,
         country,
+        reason,
       },
     }),
   )

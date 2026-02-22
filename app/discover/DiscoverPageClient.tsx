@@ -1,11 +1,14 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import Layout from "@/components/netflix-layout"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import Link from "next/link"
+import { Badge } from "@/components/ui/badge"
+import { CheckCircle2, Globe } from "lucide-react"
+import { DEFAULT_COUNTRY, DEFAULT_SERVICE_KEY, getCountryByCode, getServiceByKey } from "@/lib/streaming-options"
 
 const genres = [
   { id: "28", name: "Action" },
@@ -39,25 +42,97 @@ export default function DiscoverPageClient() {
   const [movies, setMovies] = useState<Movie[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [country, setCountry] = useState(DEFAULT_COUNTRY)
+  const [serviceName, setServiceName] = useState(getServiceByKey(DEFAULT_SERVICE_KEY).label)
+  const [providerId, setProviderId] = useState(getServiceByKey(DEFAULT_SERVICE_KEY).providerId)
+  const [settingsUpdated, setSettingsUpdated] = useState(false)
+  const settingsToastTimeoutRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    const handleStreamingFiltersChange = (
+      event: Event,
+    ) => {
+      const customEvent = event as CustomEvent<{
+        serviceName: string
+        providerId: number
+        country: string
+        reason?: "init" | "user"
+      }>
+
+      if (!customEvent.detail) {
+        return
+      }
+
+      setServiceName(customEvent.detail.serviceName)
+      setProviderId(customEvent.detail.providerId)
+      setCountry(customEvent.detail.country)
+
+      if (customEvent.detail.reason === "user") {
+        setSettingsUpdated(true)
+        if (settingsToastTimeoutRef.current) {
+          window.clearTimeout(settingsToastTimeoutRef.current)
+        }
+        settingsToastTimeoutRef.current = window.setTimeout(() => {
+          setSettingsUpdated(false)
+        }, 2200)
+      }
+    }
+
+    window.addEventListener("streamingfilterschange", handleStreamingFiltersChange)
+
+    const savedServiceKey = localStorage.getItem("selectedStreamingService") || DEFAULT_SERVICE_KEY
+    const savedService = getServiceByKey(savedServiceKey)
+    const savedCountry =
+      localStorage.getItem(`selectedCountry:${savedService.key}`) || localStorage.getItem("selectedCountry")
+
+    setServiceName(savedService.label)
+    setProviderId(savedService.providerId)
+    if (savedCountry) {
+      setCountry(savedCountry)
+    }
+
+    return () => {
+      window.removeEventListener("streamingfilterschange", handleStreamingFiltersChange)
+      if (settingsToastTimeoutRef.current) {
+        window.clearTimeout(settingsToastTimeoutRef.current)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     async function fetchMovies() {
       setLoading(true)
       setError(null)
       try {
-        let endpoint = "trending/movie/week"
+        const endpoint = "discover/movie"
         const params = new URLSearchParams()
+        const currentDate = new Date().toISOString().slice(0, 10)
+
+        params.set("include_adult", "false")
+        params.set("region", country.toUpperCase())
+        params.set("watch_region", country.toUpperCase())
+        params.set("with_watch_providers", String(providerId))
+        params.set("watch_monetization_types", "flatrate")
 
         if (activeTab === "popular") {
-          endpoint = "movie/popular"
+          params.set("sort_by", "popularity.desc")
+          params.set("vote_count.gte", "300")
         } else if (activeTab === "top_rated") {
-          endpoint = "movie/top_rated"
+          params.set("sort_by", "vote_average.desc")
+          params.set("vote_count.gte", "500")
         } else if (activeTab === "upcoming") {
-          endpoint = "movie/upcoming"
+          params.set("sort_by", "primary_release_date.asc")
+          params.set("primary_release_date.gte", currentDate)
+          params.set("vote_count.gte", "10")
         } else if (activeTab.startsWith("genre_")) {
           const genreId = activeTab.replace("genre_", "")
-          endpoint = "discover/movie"
+          params.set("sort_by", "popularity.desc")
+          params.set("vote_count.gte", "50")
           params.set("with_genres", genreId)
+        } else {
+          // "Trending" within the selected provider/country.
+          params.set("sort_by", "popularity.desc")
+          params.set("vote_count.gte", "100")
         }
 
         const query = params.toString()
@@ -68,7 +143,25 @@ export default function DiscoverPageClient() {
           throw new Error(data.status_message || data.error || "Failed to load discover movies")
         }
 
-        setMovies(data.results || [])
+        if (data.results?.length) {
+          setMovies(data.results)
+          return
+        }
+
+        // Fallback: if provider-specific catalog is sparse, keep the selected country and relax the provider filter.
+        const fallbackParams = new URLSearchParams(params)
+        fallbackParams.delete("with_watch_providers")
+        fallbackParams.delete("watch_monetization_types")
+        fallbackParams.delete("watch_region")
+
+        const fallbackResponse = await fetch(`/api/tmdb?endpoint=${endpoint}&${fallbackParams.toString()}`)
+        const fallbackData = await fallbackResponse.json()
+
+        if (!fallbackResponse.ok || fallbackData.error) {
+          throw new Error(fallbackData.status_message || fallbackData.error || "Failed to load discover movies")
+        }
+
+        setMovies(fallbackData.results || [])
       } catch (error) {
         console.error("Error fetching movies:", error)
         setMovies([])
@@ -79,13 +172,30 @@ export default function DiscoverPageClient() {
     }
 
     fetchMovies()
-  }, [activeTab])
+  }, [activeTab, country, providerId])
+
+  const selectedCountryLabel = getCountryByCode(country).label
 
   return (
     <Layout>
       <section className="py-16">
         <div className="container px-4">
           <h1 className="text-3xl font-bold mb-8">Discover Movies</h1>
+          <div className="mb-6 flex flex-wrap items-center gap-2 text-sm">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-muted-foreground">
+              <Globe className="h-3.5 w-3.5 text-netflix-red" />
+              <span>
+                Showing titles for <span className="text-white">{serviceName}</span> in{" "}
+                <span className="text-white">{selectedCountryLabel}</span>
+              </span>
+            </div>
+            {settingsUpdated && (
+              <Badge className="bg-emerald-500/15 text-emerald-300 border-emerald-500/20">
+                <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
+                Settings updated
+              </Badge>
+            )}
+          </div>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
             <div className="overflow-x-auto pb-2">
@@ -125,6 +235,14 @@ export default function DiscoverPageClient() {
                 <div className="rounded-lg border p-6 bg-card">
                   <p className="text-netflix-red font-medium mb-2">Could not load this category</p>
                   <p className="text-sm text-muted-foreground">{error}</p>
+                </div>
+              ) : movies.length === 0 ? (
+                <div className="rounded-lg border p-6 bg-card">
+                  <p className="font-medium mb-2">No titles found for this category</p>
+                  <p className="text-sm text-muted-foreground">
+                    We couldn&apos;t find matching titles for {serviceName} in {selectedCountryLabel}. Try another
+                    category, service, or country.
+                  </p>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
