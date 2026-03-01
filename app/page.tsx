@@ -2,26 +2,40 @@ import Layout from "@/components/netflix-layout"
 import WelcomeHero from "@/components/welcome-hero"
 import RecommendationEngine from "@/components/recommendation-engine"
 import HowItWorks from "@/components/how-it-works"
+import NewReleases from "@/components/new-releases"
 import FeaturedMovies from "@/components/featured-movies"
 
 export default function Home() {
   return (
     <Layout>
-      {/* Clear Welcome Hero with Value Proposition */}
       <WelcomeHero />
 
-      {/* Main Recommendation Engine - Core Feature */}
-      <section className="py-12 bg-secondary/50">
-        <div className="container px-4">
-          <h2 className="text-2xl md:text-3xl font-bold mb-8 text-center">Find Your Perfect Movie Match</h2>
+      {/* Quick recommendation section */}
+      <section className="py-16 relative">
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background: "radial-gradient(ellipse 60% 40% at 50% 0%, rgba(229,9,20,0.04), transparent)",
+          }}
+        />
+        <div className="container px-4 relative">
+          <div className="text-center mb-10">
+            <p className="text-xs font-semibold tracking-[0.25em] uppercase text-netflix-red/60 mb-3">
+              Start here
+            </p>
+            <h2 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight">
+              Find your perfect match
+            </h2>
+          </div>
           <RecommendationEngine />
         </div>
       </section>
 
-      {/* How It Works Section */}
       <HowItWorks />
 
-      {/* Featured Content Section */}
+      {/* New Releases — live content filtered by selected service + country */}
+      <NewReleases />
+
       <FeaturedMovies />
     </Layout>
   )
